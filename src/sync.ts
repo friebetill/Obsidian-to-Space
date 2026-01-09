@@ -1,12 +1,12 @@
 import { TFile } from 'obsidian';
 import type ObsidianToSpacePlugin from './main';
 import { SpaceApiClient } from './space-api';
-import { parseFlashcards, insertSpaceIds, ParsedCard } from './parser';
+import { parseFlashcards, updateSpaceComments, ParsedCard } from './parser';
 
 export interface SyncResult {
   created: number;
   updated: number;
-  deleted: number;
+  skipped: number;
   errors: string[];
 }
 
@@ -34,7 +34,7 @@ export class SyncEngine {
     const result: SyncResult = {
       created: 0,
       updated: 0,
-      deleted: 0,
+      skipped: 0,
       errors: [],
     };
 
@@ -49,7 +49,7 @@ export class SyncEngine {
         const fileResult = await this.syncFile(file);
         result.created += fileResult.created;
         result.updated += fileResult.updated;
-        result.deleted += fileResult.deleted;
+        result.skipped += fileResult.skipped;
         result.errors.push(...fileResult.errors);
       } catch (error: any) {
         result.errors.push(`Error syncing ${file.path}: ${error.message}`);
@@ -74,7 +74,7 @@ export class SyncEngine {
     const result: SyncResult = {
       created: 0,
       updated: 0,
-      deleted: 0,
+      skipped: 0,
       errors: [],
     };
 
@@ -97,8 +97,8 @@ export class SyncEngine {
       return result;
     }
 
-    // Track cards that need space-id comments inserted
-    const newCardUpdates: Array<{ card: ParsedCard; newSpaceId: string }> = [];
+    // Track cards that need comment updates
+    const cardUpdates: Array<{ card: ParsedCard; spaceId: string; isNew: boolean }> = [];
 
     // Sync each card
     for (const card of cards) {
@@ -106,20 +106,22 @@ export class SyncEngine {
         const syncResult = await this.syncCard(card, deckId);
         if (syncResult.action === 'created') {
           result.created++;
-          // Track new cards for inserting space-id comments
-          newCardUpdates.push({ card, newSpaceId: syncResult.spaceId });
+          cardUpdates.push({ card, spaceId: syncResult.spaceId, isNew: true });
         } else if (syncResult.action === 'updated') {
           result.updated++;
+          cardUpdates.push({ card, spaceId: syncResult.spaceId, isNew: false });
+        } else {
+          result.skipped++;
         }
       } catch (error: any) {
         result.errors.push(`Error syncing card: ${error.message}`);
       }
     }
 
-    // Insert space-id comments for newly created cards
-    if (newCardUpdates.length > 0) {
+    // Update comments for synced cards (new cards get comments, updated cards get new hash)
+    if (cardUpdates.length > 0) {
       try {
-        const updatedContent = insertSpaceIds(content, newCardUpdates);
+        const updatedContent = updateSpaceComments(content, cardUpdates);
         await this.plugin.app.vault.modify(file, updatedContent);
       } catch (error: any) {
         result.errors.push(`Error updating file with space-ids: ${error.message}`);
@@ -134,7 +136,12 @@ export class SyncEngine {
    */
   private async syncCard(card: ParsedCard, deckId: string): Promise<CardSyncResult> {
     if (card.spaceId) {
-      // Card already has a space-id, update it
+      // Card already synced - check if it changed
+      if (!card.hasChanged) {
+        // No changes, skip
+        return { action: 'skipped', spaceId: card.spaceId };
+      }
+      // Card changed, update it
       const spaceCard = await this.apiClient.upsertCard(
         deckId,
         card.front,
