@@ -16,12 +16,16 @@ export interface ParsedCard {
   contentHash: string;
   /** Whether the card content has changed since last sync */
   hasChanged: boolean;
+  /** Target deck name from TARGET DECK directive (null = use default) */
+  deckName: string | null;
 }
 
 /**
  * Parses Q:/A: flashcards from markdown content
  *
  * Supported format:
+ *   TARGET DECK: My Deck Name
+ *
  *   Q: What is the capital of France?
  *   A: Paris
  *   <!-- space-id: cuid123 hash:abc123 -->
@@ -33,9 +37,36 @@ export interface ParsedCard {
  *   - Blue
  *   - Yellow
  *   <!-- space-id: cuid456 hash:def456 -->
+ *
+ * TARGET DECK can appear multiple times to assign cards to different decks.
+ * Cards before any TARGET DECK use the default deck from settings.
  */
 export function parseFlashcards(content: string): ParsedCard[] {
   const cards: ParsedCard[] = [];
+
+  // First, find all TARGET DECK directives and their positions
+  const deckDirectives: Array<{ position: number; deckName: string }> = [];
+  const targetDeckPattern = /^TARGET DECK:\s*(.+)$/gim;
+  let deckMatch;
+  while ((deckMatch = targetDeckPattern.exec(content)) !== null) {
+    deckDirectives.push({
+      position: deckMatch.index,
+      deckName: deckMatch[1].trim(),
+    });
+  }
+
+  // Helper to find the deck name for a given position
+  const getDeckNameForPosition = (position: number): string | null => {
+    let currentDeck: string | null = null;
+    for (const directive of deckDirectives) {
+      if (directive.position < position) {
+        currentDeck = directive.deckName;
+      } else {
+        break;
+      }
+    }
+    return currentDeck;
+  };
 
   // Regex to match Q: ... A: ... patterns with optional space-id comment
   // Group 1: Question content
@@ -62,6 +93,7 @@ export function parseFlashcards(content: string): ParsedCard[] {
     if (!front || !back) continue;
 
     const contentHash = generateHash(front + '||' + back);
+    const deckName = getDeckNameForPosition(match.index);
 
     const card: ParsedCard = {
       front,
@@ -72,6 +104,7 @@ export function parseFlashcards(content: string): ParsedCard[] {
       storedHash,
       contentHash,
       hasChanged: !storedHash || storedHash !== contentHash,
+      deckName,
     };
 
     cards.push(card);

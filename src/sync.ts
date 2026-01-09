@@ -16,6 +16,8 @@ export interface SyncResult {
 export class SyncEngine {
   private plugin: ObsidianToSpacePlugin;
   private apiClient: SpaceApiClient;
+  /** Cache of deck name -> deck ID resolved during sync */
+  private deckIdCache: Map<string, string> = new Map();
 
   constructor(plugin: ObsidianToSpacePlugin, apiClient: SpaceApiClient) {
     this.plugin = plugin;
@@ -33,7 +35,10 @@ export class SyncEngine {
       errors: [],
     };
 
-    // Ensure we have a deck to sync to
+    // Clear deck cache at start of sync
+    this.deckIdCache.clear();
+
+    // Ensure we have a default deck to sync to
     await this.ensureDefaultDeck();
 
     // Get all markdown files
@@ -83,56 +88,82 @@ export class SyncEngine {
       return result;
     }
 
-    // Ensure we have a deck
+    // Ensure we have a default deck
     await this.ensureDefaultDeck();
-    const deckId = this.plugin.settings.defaultDeckId;
+    const defaultDeckId = this.plugin.settings.defaultDeckId;
 
-    if (!deckId) {
+    if (!defaultDeckId) {
       result.errors.push('No deck available for syncing');
       return result;
     }
 
-    // Separate cards into those that need syncing and those to skip
-    const cardsToSync: Array<{ card: ParsedCard; isNew: boolean }> = [];
-
+    // Group cards by deck name (null = default deck)
+    const cardsByDeck = new Map<string | null, ParsedCard[]>();
     for (const card of cards) {
-      if (card.spaceId && !card.hasChanged) {
-        // Card unchanged, skip
-        result.skipped++;
-      } else {
-        cardsToSync.push({ card, isNew: !card.spaceId });
+      const deckKey = card.deckName;
+      if (!cardsByDeck.has(deckKey)) {
+        cardsByDeck.set(deckKey, []);
       }
+      cardsByDeck.get(deckKey)!.push(card);
     }
 
     // Track cards that need comment updates
     const cardUpdates: Array<{ card: ParsedCard; spaceId: string; isNew: boolean }> = [];
 
-    // Batch sync cards if there are any to sync
-    if (cardsToSync.length > 0) {
-      try {
-        const batchInput = cardsToSync.map(({ card }) => ({
-          front: card.front,
-          back: card.back,
-          id: card.spaceId || undefined,
-        }));
-
-        const syncedCards = await this.apiClient.upsertCards(deckId, batchInput);
-
-        // Map results back to original cards
-        for (let i = 0; i < cardsToSync.length; i++) {
-          const { card, isNew } = cardsToSync[i];
-          const syncedCard = syncedCards[i];
-
-          if (isNew) {
-            result.created++;
-          } else {
-            result.updated++;
-          }
-
-          cardUpdates.push({ card, spaceId: syncedCard.id, isNew });
+    // Process each deck group
+    for (const [deckName, deckCards] of cardsByDeck) {
+      // Resolve deck ID
+      let deckId: string;
+      if (deckName === null) {
+        deckId = defaultDeckId;
+      } else {
+        try {
+          deckId = await this.resolveDeckId(deckName);
+        } catch (error: any) {
+          result.errors.push(`Error resolving deck "${deckName}": ${error.message}`);
+          continue;
         }
-      } catch (error: any) {
-        result.errors.push(`Error batch syncing cards: ${error.message}`);
+      }
+
+      // Separate cards into those that need syncing and those to skip
+      const cardsToSync: Array<{ card: ParsedCard; isNew: boolean }> = [];
+
+      for (const card of deckCards) {
+        if (card.spaceId && !card.hasChanged) {
+          // Card unchanged, skip
+          result.skipped++;
+        } else {
+          cardsToSync.push({ card, isNew: !card.spaceId });
+        }
+      }
+
+      // Batch sync cards if there are any to sync
+      if (cardsToSync.length > 0) {
+        try {
+          const batchInput = cardsToSync.map(({ card }) => ({
+            front: card.front,
+            back: card.back,
+            id: card.spaceId || undefined,
+          }));
+
+          const syncedCards = await this.apiClient.upsertCards(deckId, batchInput);
+
+          // Map results back to original cards
+          for (let i = 0; i < cardsToSync.length; i++) {
+            const { card, isNew } = cardsToSync[i];
+            const syncedCard = syncedCards[i];
+
+            if (isNew) {
+              result.created++;
+            } else {
+              result.updated++;
+            }
+
+            cardUpdates.push({ card, spaceId: syncedCard.id, isNew });
+          }
+        } catch (error: any) {
+          result.errors.push(`Error batch syncing cards to "${deckName || 'default'}": ${error.message}`);
+        }
       }
     }
 
@@ -147,6 +178,36 @@ export class SyncEngine {
     }
 
     return result;
+  }
+
+  /**
+   * Resolve a deck name to a deck ID, creating if necessary
+   * Results are cached for the duration of the sync
+   */
+  private async resolveDeckId(deckName: string): Promise<string> {
+    // Check cache first
+    if (this.deckIdCache.has(deckName)) {
+      return this.deckIdCache.get(deckName)!;
+    }
+
+    // Try to find existing deck with this name
+    const existingDecks = await this.apiClient.searchDecks(deckName);
+    const matchingDeck = existingDecks.find(
+      (d) => d.name.toLowerCase() === deckName.toLowerCase()
+    );
+
+    let deckId: string;
+    if (matchingDeck) {
+      deckId = matchingDeck.id;
+    } else {
+      // Create new deck
+      const newDeck = await this.apiClient.upsertDeck(deckName);
+      deckId = newDeck.id;
+    }
+
+    // Cache the result
+    this.deckIdCache.set(deckName, deckId);
+    return deckId;
   }
 
   /**
