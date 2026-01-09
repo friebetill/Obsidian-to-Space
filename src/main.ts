@@ -1,7 +1,6 @@
 import { Notice, Plugin } from 'obsidian';
 import { SpaceSettingTab, SpacePluginSettings, DEFAULT_SETTINGS } from './settings';
 import { SpaceApiClient } from './space-api';
-import { parseFlashcards } from './parser';
 import { SyncEngine } from './sync';
 
 export default class ObsidianToSpacePlugin extends Plugin {

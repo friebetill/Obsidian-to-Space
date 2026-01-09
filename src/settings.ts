@@ -17,14 +17,10 @@ export interface SpacePluginSettings {
   autoSyncOnSave: boolean;
   lastSyncTime: number | null;
   lastSyncStats: { created: number; updated: number } | null;
-  /** Maps local card IDs to Space card IDs */
-  cardMappings: Record<string, string>;
-  /** Maps deck names to Space deck IDs */
-  deckMappings: Record<string, string>;
 }
 
 export const DEFAULT_SETTINGS: SpacePluginSettings = {
-  apiEndpoint: 'https://api.getspace.app/graphql',
+  apiEndpoint: 'https://api.getspace.app',
   token: null,
   email: null,
   defaultDeckName: 'Obsidian Flashcards',
@@ -32,8 +28,6 @@ export const DEFAULT_SETTINGS: SpacePluginSettings = {
   autoSyncOnSave: false,
   lastSyncTime: null,
   lastSyncStats: null,
-  cardMappings: {},
-  deckMappings: {},
 };
 
 export class SpaceSettingTab extends PluginSettingTab {

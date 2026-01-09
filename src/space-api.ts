@@ -122,8 +122,8 @@ export class SpaceApiClient {
    */
   async upsertDeck(name: string, id?: string): Promise<SpaceDeck> {
     const query = `
-      mutation UpsertDeck($name: String!, $id: String) {
-        upsertDeck(name: $name, id: $id) {
+      mutation UpsertDeck($name: String!, $description: String!, $createMirrorCard: Boolean!, $id: ID) {
+        upsertDeck(name: $name, description: $description, createMirrorCard: $createMirrorCard, id: $id) {
           id
           name
           description
@@ -131,7 +131,12 @@ export class SpaceApiClient {
       }
     `;
 
-    const result = await this.executeGraphQLWithRateLimit(query, { name, id });
+    const result = await this.executeGraphQLWithRateLimit(query, {
+      name,
+      description: '',
+      createMirrorCard: false,
+      id: id || null
+    });
 
     if (result.errors) {
       throw new Error(result.errors[0]?.message || 'Failed to create/update deck');
@@ -150,7 +155,7 @@ export class SpaceApiClient {
     id?: string
   ): Promise<SpaceCard> {
     const query = `
-      mutation UpsertCard($deckId: String!, $front: String!, $back: String!, $id: String) {
+      mutation UpsertCard($deckId: ID!, $front: String!, $back: String!, $id: ID) {
         upsertCard(deckId: $deckId, front: $front, back: $back, id: $id) {
           id
           front
@@ -163,7 +168,7 @@ export class SpaceApiClient {
       deckId,
       front,
       back,
-      id,
+      id: id || null,
     });
 
     if (result.errors) {
@@ -197,14 +202,12 @@ export class SpaceApiClient {
    */
   async searchDecks(searchTerm: string = '', first: number = 100): Promise<SpaceDeck[]> {
     const query = `
-      query SearchDecks($searchTerm: String!, $first: Int) {
+      query SearchDecks($searchTerm: String!, $first: Int!) {
         searchDecks(searchTerm: $searchTerm, first: $first) {
-          edges {
-            node {
-              id
-              name
-              description
-            }
+          nodes {
+            id
+            name
+            description
           }
         }
       }
@@ -216,7 +219,7 @@ export class SpaceApiClient {
       throw new Error(result.errors[0]?.message || 'Failed to search decks');
     }
 
-    return result.data.searchDecks.edges.map((edge: any) => edge.node);
+    return result.data.searchDecks.nodes;
   }
 
   /**

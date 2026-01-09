@@ -1,13 +1,18 @@
 import { TFile } from 'obsidian';
 import type ObsidianToSpacePlugin from './main';
 import { SpaceApiClient } from './space-api';
-import { parseFlashcards, generateLocalCardId, ParsedCard } from './parser';
+import { parseFlashcards, insertSpaceIds, ParsedCard } from './parser';
 
 export interface SyncResult {
   created: number;
   updated: number;
   deleted: number;
   errors: string[];
+}
+
+interface CardSyncResult {
+  action: 'created' | 'updated' | 'skipped';
+  spaceId: string;
 }
 
 /**
@@ -92,17 +97,32 @@ export class SyncEngine {
       return result;
     }
 
+    // Track cards that need space-id comments inserted
+    const newCardUpdates: Array<{ card: ParsedCard; newSpaceId: string }> = [];
+
     // Sync each card
     for (const card of cards) {
       try {
-        const syncResult = await this.syncCard(file.path, card, deckId);
-        if (syncResult === 'created') {
+        const syncResult = await this.syncCard(card, deckId);
+        if (syncResult.action === 'created') {
           result.created++;
-        } else if (syncResult === 'updated') {
+          // Track new cards for inserting space-id comments
+          newCardUpdates.push({ card, newSpaceId: syncResult.spaceId });
+        } else if (syncResult.action === 'updated') {
           result.updated++;
         }
       } catch (error: any) {
         result.errors.push(`Error syncing card: ${error.message}`);
+      }
+    }
+
+    // Insert space-id comments for newly created cards
+    if (newCardUpdates.length > 0) {
+      try {
+        const updatedContent = insertSpaceIds(content, newCardUpdates);
+        await this.plugin.app.vault.modify(file, updatedContent);
+      } catch (error: any) {
+        result.errors.push(`Error updating file with space-ids: ${error.message}`);
       }
     }
 
@@ -112,29 +132,20 @@ export class SyncEngine {
   /**
    * Sync a single card to Space
    */
-  private async syncCard(
-    filePath: string,
-    card: ParsedCard,
-    deckId: string
-  ): Promise<'created' | 'updated' | 'skipped'> {
-    const localId = generateLocalCardId(filePath, card);
-
-    // Check if we've synced this card before
-    const existingSpaceId = this.plugin.settings.cardMappings[localId];
-
-    if (existingSpaceId) {
-      // Update existing card
-      await this.apiClient.upsertCard(deckId, card.front, card.back, existingSpaceId);
-      return 'updated';
+  private async syncCard(card: ParsedCard, deckId: string): Promise<CardSyncResult> {
+    if (card.spaceId) {
+      // Card already has a space-id, update it
+      const spaceCard = await this.apiClient.upsertCard(
+        deckId,
+        card.front,
+        card.back,
+        card.spaceId
+      );
+      return { action: 'updated', spaceId: spaceCard.id };
     } else {
-      // Create new card
+      // New card, create it
       const spaceCard = await this.apiClient.upsertCard(deckId, card.front, card.back);
-
-      // Store the mapping
-      this.plugin.settings.cardMappings[localId] = spaceCard.id;
-      await this.plugin.saveSettings();
-
-      return 'created';
+      return { action: 'created', spaceId: spaceCard.id };
     }
   }
 
