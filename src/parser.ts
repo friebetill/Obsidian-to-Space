@@ -136,14 +136,21 @@ export function updateSpaceComments(
       result = trimmedBefore + '\n' + comment + separator + trimmedAfter;
     } else {
       // Update existing comment with new hash
-      // Find and replace the old comment
-      const oldCommentPattern = /<!--\s*space-id:\s*\S+(?:\s+hash:\S+)?\s*-->/;
+      // Find the LAST occurrence of the comment pattern (the one for this card)
+      const oldCommentPattern = /<!--\s*space-id:\s*\S+(?:\s+hash:\S+)?\s*-->/g;
       const beforeCard = result.substring(0, card.endPosition);
       const afterCard = result.substring(card.endPosition);
 
-      // The old comment is at the end of beforeCard (before trimming for the match)
-      const updatedBefore = beforeCard.replace(oldCommentPattern, comment);
-      result = updatedBefore + afterCard;
+      // Find all matches and replace only the last one
+      const matches = [...beforeCard.matchAll(oldCommentPattern)];
+      if (matches.length > 0) {
+        const lastMatch = matches[matches.length - 1];
+        const updatedBefore =
+          beforeCard.substring(0, lastMatch.index) +
+          comment +
+          beforeCard.substring(lastMatch.index! + lastMatch[0].length);
+        result = updatedBefore + afterCard;
+      }
     }
   }
 
