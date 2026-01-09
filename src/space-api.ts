@@ -179,6 +179,39 @@ export class SpaceApiClient {
   }
 
   /**
+   * Create or update multiple cards in a single batch
+   */
+  async upsertCards(
+    deckId: string,
+    cards: Array<{ front: string; back: string; id?: string }>
+  ): Promise<SpaceCard[]> {
+    const query = `
+      mutation UpsertCards($deckId: ID!, $cards: [CardInput!]!) {
+        upsertCards(deckId: $deckId, cards: $cards) {
+          id
+          front
+          back
+        }
+      }
+    `;
+
+    const result = await this.executeGraphQLWithRateLimit(query, {
+      deckId,
+      cards: cards.map((c) => ({
+        id: c.id || null,
+        front: c.front,
+        back: c.back,
+      })),
+    });
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to batch create/update cards');
+    }
+
+    return result.data.upsertCards;
+  }
+
+  /**
    * Delete a card
    */
   async deleteCard(id: string): Promise<void> {
