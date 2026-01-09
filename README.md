@@ -5,6 +5,7 @@ Sync your flashcards from [Obsidian](https://obsidian.md) to [Space](https://get
 ## Features
 
 - **Simple syntax**: Write flashcards using `Q:` and `A:` in your notes
+- **Multi-deck support**: Use `TARGET DECK:` to organize cards into different decks
 - **One-click sync**: Sync all flashcards with a single command
 - **In-plugin auth**: Create a Space account or log in without leaving Obsidian
 - **Smart tracking**: Cards are tracked via comments, so you can edit content freely
@@ -61,6 +62,30 @@ A: The three primary colors are:
 - Yellow
 ```
 
+### Organizing Cards into Decks
+
+Use `TARGET DECK:` to specify which deck cards should sync to:
+
+```markdown
+TARGET DECK: Spanish Vocabulary
+
+Q: How do you say "hello" in Spanish?
+A: Hola
+
+Q: How do you say "goodbye" in Spanish?
+A: Adiós
+
+TARGET DECK: French Vocabulary
+
+Q: How do you say "hello" in French?
+A: Bonjour
+```
+
+- Cards after a `TARGET DECK:` line sync to that deck
+- You can use multiple `TARGET DECK:` directives in one file
+- Cards before any `TARGET DECK:` use the default deck from settings
+- Decks are created automatically if they don't exist
+
 ### 3. Sync to Space
 
 Either:
@@ -107,7 +132,7 @@ This allows you to:
 
 ### Can I sync to multiple decks?
 
-Currently, all cards sync to a single deck. Multi-deck support is planned for a future release.
+Yes! Use the `TARGET DECK:` directive to specify which deck cards should sync to. See [Organizing Cards into Decks](#organizing-cards-into-decks) for details.
 
 ### What happens if I delete a card in Obsidian?
 
