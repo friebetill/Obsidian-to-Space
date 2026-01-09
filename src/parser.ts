@@ -18,6 +18,10 @@ export interface ParsedCard {
   hasChanged: boolean;
   /** Target deck name from TARGET DECK directive (null = use default) */
   deckName: string | null;
+  /** Deck name stored in the comment from last sync (null = default deck) */
+  storedDeckName: string | null;
+  /** Whether the deck assignment has changed since last sync */
+  hasDeckChanged: boolean;
 }
 
 /**
@@ -79,14 +83,16 @@ export function parseFlashcards(content: string): ParsedCard[] {
     let back = match[2].trim();
     let spaceId: string | null = null;
     let storedHash: string | null = null;
+    let storedDeckName: string | null = null;
 
     // Check if there's a space-id comment at the end of the back content
-    // Format: <!-- space-id: xxx --> or <!-- space-id: xxx hash:yyy -->
-    const spaceIdMatch = back.match(/<!--\s*space-id:\s*(\S+)(?:\s+hash:(\S+))?\s*-->$/);
+    // Format: <!-- space-id: xxx --> or <!-- space-id: xxx hash:yyy --> or <!-- space-id: xxx hash:yyy deck:zzz -->
+    const spaceIdMatch = back.match(/<!--\s*space-id:\s*(\S+)(?:\s+hash:(\S+))?(?:\s+deck:(.+?))?\s*-->$/);
     if (spaceIdMatch) {
       spaceId = spaceIdMatch[1];
       storedHash = spaceIdMatch[2] || null;
-      back = back.replace(/\s*<!--\s*space-id:\s*\S+(?:\s+hash:\S+)?\s*-->$/, '').trim();
+      storedDeckName = spaceIdMatch[3]?.trim() || null;
+      back = back.replace(/\s*<!--\s*space-id:\s*\S+(?:\s+hash:\S+)?(?:\s+deck:.+?)?\s*-->$/, '').trim();
     }
 
     // Skip empty cards
@@ -105,6 +111,8 @@ export function parseFlashcards(content: string): ParsedCard[] {
       contentHash,
       hasChanged: !storedHash || storedHash !== contentHash,
       deckName,
+      storedDeckName,
+      hasDeckChanged: deckName !== storedDeckName,
     };
 
     cards.push(card);
@@ -129,10 +137,11 @@ function generateHash(str: string): string {
 
 /**
  * Generates the space-id comment to insert after a card
- * Includes content hash for change detection
+ * Includes content hash for change detection and deck name for deck tracking
  */
-export function generateSpaceIdComment(spaceId: string, contentHash: string): string {
-  return `<!-- space-id: ${spaceId} hash:${contentHash} -->`;
+export function generateSpaceIdComment(spaceId: string, contentHash: string, deckName: string | null): string {
+  const deckPart = deckName ? ` deck:${deckName}` : '';
+  return `<!-- space-id: ${spaceId} hash:${contentHash}${deckPart} -->`;
 }
 
 /**
@@ -142,21 +151,21 @@ export function generateSpaceIdComment(spaceId: string, contentHash: string): st
  * Format:
  *   Q: Question
  *   A: Answer
- *   <!-- space-id: xxx hash:yyy -->
+ *   <!-- space-id: xxx hash:yyy deck:DeckName -->
  *
  *   Q: Next question
  */
 export function updateSpaceComments(
   content: string,
-  cardUpdates: Array<{ card: ParsedCard; spaceId: string; isNew: boolean }>
+  cardUpdates: Array<{ card: ParsedCard; spaceId: string; isNew: boolean; deckName: string | null }>
 ): string {
   // Sort by position descending so we can modify from end to start
   // without messing up positions
   const sorted = [...cardUpdates].sort((a, b) => b.card.endPosition - a.card.endPosition);
 
   let result = content;
-  for (const { card, spaceId, isNew } of sorted) {
-    const comment = generateSpaceIdComment(spaceId, card.contentHash);
+  for (const { card, spaceId, isNew, deckName } of sorted) {
+    const comment = generateSpaceIdComment(spaceId, card.contentHash, deckName);
 
     if (isNew) {
       // Insert new comment
@@ -168,9 +177,9 @@ export function updateSpaceComments(
       const separator = trimmedAfter.length > 0 ? '\n\n' : '\n';
       result = trimmedBefore + '\n' + comment + separator + trimmedAfter;
     } else {
-      // Update existing comment with new hash
+      // Update existing comment with new hash and deck
       // Find the LAST occurrence of the comment pattern (the one for this card)
-      const oldCommentPattern = /<!--\s*space-id:\s*\S+(?:\s+hash:\S+)?\s*-->/g;
+      const oldCommentPattern = /<!--\s*space-id:\s*\S+(?:\s+hash:\S+)?(?:\s+deck:.+?)?\s*-->/g;
       const beforeCard = result.substring(0, card.endPosition);
       const afterCard = result.substring(card.endPosition);
 

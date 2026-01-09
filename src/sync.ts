@@ -108,7 +108,7 @@ export class SyncEngine {
     }
 
     // Track cards that need comment updates
-    const cardUpdates: Array<{ card: ParsedCard; spaceId: string; isNew: boolean }> = [];
+    const cardUpdates: Array<{ card: ParsedCard; spaceId: string; isNew: boolean; deckName: string | null }> = [];
 
     // Process each deck group
     for (const [deckName, deckCards] of cardsByDeck) {
@@ -129,8 +129,8 @@ export class SyncEngine {
       const cardsToSync: Array<{ card: ParsedCard; isNew: boolean }> = [];
 
       for (const card of deckCards) {
-        if (card.spaceId && !card.hasChanged) {
-          // Card unchanged, skip
+        if (card.spaceId && !card.hasChanged && !card.hasDeckChanged) {
+          // Card unchanged and in same deck, skip
           result.skipped++;
         } else {
           cardsToSync.push({ card, isNew: !card.spaceId });
@@ -159,7 +159,7 @@ export class SyncEngine {
               result.updated++;
             }
 
-            cardUpdates.push({ card, spaceId: syncedCard.id, isNew });
+            cardUpdates.push({ card, spaceId: syncedCard.id, isNew, deckName });
           }
         } catch (error: any) {
           result.errors.push(`Error batch syncing cards to "${deckName || 'default'}": ${error.message}`);
