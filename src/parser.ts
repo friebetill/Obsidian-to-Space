@@ -95,6 +95,13 @@ export function generateSpaceIdComment(spaceId: string): string {
 /**
  * Inserts space-id comments into the content for newly synced cards
  * Returns the modified content
+ *
+ * Format:
+ *   Q: Question
+ *   A: Answer
+ *   <!-- space-id: xxx -->
+ *
+ *   Q: Next question
  */
 export function insertSpaceIds(
   content: string,
@@ -109,14 +116,19 @@ export function insertSpaceIds(
     // Only insert if card doesn't already have a space-id
     if (card.spaceId) continue;
 
-    const comment = `\n${generateSpaceIdComment(newSpaceId)}`;
+    const comment = generateSpaceIdComment(newSpaceId);
 
-    // Find the end of this card's content and insert the comment
-    // We need to find where the answer ends in the original content
+    // Find where the answer content ends (trim trailing whitespace from the match)
     const beforeCard = result.substring(0, card.endPosition);
     const afterCard = result.substring(card.endPosition);
 
-    result = beforeCard + comment + afterCard;
+    // Remove trailing whitespace/newlines from beforeCard, add comment, then proper spacing
+    const trimmedBefore = beforeCard.trimEnd();
+
+    // Add the comment right after the answer, then a blank line for separation before next card
+    const trimmedAfter = afterCard.trimStart();
+    const separator = trimmedAfter.length > 0 ? '\n\n' : '\n';
+    result = trimmedBefore + '\n' + comment + separator + trimmedAfter;
   }
 
   return result;
