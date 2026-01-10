@@ -1,7 +1,8 @@
-import { TFile } from 'obsidian';
+import { TFile, Notice } from 'obsidian';
 import type ObsidianToSpacePlugin from './main';
 import { SpaceApiClient } from './space-api';
 import { parseFlashcards, updateSpaceComments, ParsedCard } from './parser';
+import { getOrUploadMedia } from './media-uploader';
 
 export interface SyncResult {
   created: number;
@@ -140,11 +141,41 @@ export class SyncEngine {
       // Batch sync cards if there are any to sync
       if (cardsToSync.length > 0) {
         try {
-          const batchInput = cardsToSync.map(({ card }) => ({
-            front: card.front,
-            back: card.back,
-            id: card.spaceId || undefined,
-          }));
+          // Process embedded media for each card
+          const batchInput = await Promise.all(
+            cardsToSync.map(async ({ card }) => {
+              let front = card.front;
+              let back = card.back;
+
+              // Upload embedded media and replace placeholders
+              for (const media of card.embeddedMedia) {
+                const uploadResult = await getOrUploadMedia(
+                  this.plugin.app.vault,
+                  media.originalPath,
+                  this.plugin.settings,
+                  this.apiClient,
+                  () => this.plugin.saveSettings()
+                );
+
+                if (uploadResult.success && uploadResult.url) {
+                  // Replace Obsidian embed with markdown image/video syntax for Space
+                  // Format: ![filename](url) - Space app detects .mp4 URLs and renders as video
+                  const filename = media.originalPath.split('/').pop() || 'media';
+                  const markdownEmbed = `![${filename}](${uploadResult.url})`;
+                  front = front.split(media.placeholder).join(markdownEmbed);
+                  back = back.split(media.placeholder).join(markdownEmbed);
+                } else if (uploadResult.error) {
+                  console.warn(`Failed to upload ${media.originalPath}: ${uploadResult.error}`);
+                }
+              }
+
+              return {
+                front,
+                back,
+                id: card.spaceId || undefined,
+              };
+            })
+          );
 
           const syncedCards = await this.apiClient.upsertCards(deckId, batchInput);
 

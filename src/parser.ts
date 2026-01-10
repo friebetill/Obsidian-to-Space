@@ -1,4 +1,16 @@
 /**
+ * Represents an embedded media file in a flashcard
+ */
+export interface EmbeddedMedia {
+  /** Original path in vault (e.g., "attachments/video.mp4") */
+  originalPath: string;
+  /** Original embed syntax (e.g., "![[video.mp4]]") */
+  placeholder: string;
+  /** Media type */
+  type: 'video' | 'image';
+}
+
+/**
  * Represents a parsed flashcard from markdown content
  */
 export interface ParsedCard {
@@ -22,6 +34,8 @@ export interface ParsedCard {
   storedDeckName: string | null;
   /** Whether the deck assignment has changed since last sync */
   hasDeckChanged: boolean;
+  /** Embedded media files (videos, images) in the card */
+  embeddedMedia: EmbeddedMedia[];
 }
 
 /**
@@ -101,6 +115,11 @@ export function parseFlashcards(content: string): ParsedCard[] {
     const contentHash = generateHash(front + '||' + back);
     const deckName = getDeckNameForPosition(match.index);
 
+    // Extract embedded media from both front and back
+    const frontMedia = extractEmbeddedMedia(front);
+    const backMedia = extractEmbeddedMedia(back);
+    const embeddedMedia = [...frontMedia, ...backMedia];
+
     const card: ParsedCard = {
       front,
       back,
@@ -113,6 +132,7 @@ export function parseFlashcards(content: string): ParsedCard[] {
       deckName,
       storedDeckName,
       hasDeckChanged: deckName !== storedDeckName,
+      embeddedMedia,
     };
 
     cards.push(card);
@@ -133,6 +153,39 @@ function generateHash(str: string): string {
     hash = hash & hash; // Convert to 32bit integer
   }
   return Math.abs(hash).toString(36);
+}
+
+/**
+ * Extracts embedded media from content (Obsidian ![[file]] syntax)
+ * Supports videos (mp4, webm, mov) and images (png, jpg, jpeg, gif, webp)
+ */
+function extractEmbeddedMedia(content: string): EmbeddedMedia[] {
+  const media: EmbeddedMedia[] = [];
+  const videoExtensions = ['mp4', 'webm', 'mov'];
+  const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+  const allExtensions = [...videoExtensions, ...imageExtensions].join('|');
+
+  // Match Obsidian embed syntax: ![[filename.ext]] or ![[path/to/filename.ext]]
+  const pattern = new RegExp(`!\\[\\[([^\\]]+\\.(${allExtensions}))\\]\\]`, 'gi');
+
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(content)) !== null) {
+    const currentMatch = match; // Capture for closure
+    const filePath = currentMatch[1];
+    const extension = filePath.split('.').pop()?.toLowerCase() || '';
+    const type = videoExtensions.includes(extension) ? 'video' : 'image';
+
+    // Avoid duplicates
+    if (!media.some(m => m.placeholder === currentMatch[0])) {
+      media.push({
+        originalPath: filePath,
+        placeholder: currentMatch[0],
+        type,
+      });
+    }
+  }
+
+  return media;
 }
 
 /**

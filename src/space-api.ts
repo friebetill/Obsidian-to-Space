@@ -231,6 +231,30 @@ export class SpaceApiClient {
   }
 
   /**
+   * Get pre-signed S3 PUT URL for uploading a file (CORS-friendly)
+   * Returns the upload URL and public URL
+   */
+  async getPreSignedS3PutUrl(key: string, contentType: string): Promise<{
+    uploadUrl: string;
+    publicUrl: string;
+  }> {
+    const query = `
+      mutation GetPreSignedS3PutUrl($key: String!, $contentType: String!) {
+        getPreSignedS3PutUrl(key: $key, contentType: $contentType)
+      }
+    `;
+
+    const result = await this.executeGraphQLWithRateLimit(query, { key, contentType });
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to get upload URL');
+    }
+
+    // The API returns a JSON string that we need to parse
+    return JSON.parse(result.data.getPreSignedS3PutUrl);
+  }
+
+  /**
    * Search for decks
    */
   async searchDecks(searchTerm: string = '', first: number = 100): Promise<SpaceDeck[]> {

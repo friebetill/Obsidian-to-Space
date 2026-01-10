@@ -17,6 +17,8 @@ export interface SpacePluginSettings {
   autoSyncOnSave: boolean;
   lastSyncTime: number | null;
   lastSyncStats: { created: number; updated: number } | null;
+  /** Cache of uploaded media: "path:hash" -> s3Url */
+  uploadedMedia: Record<string, string>;
 }
 
 export const DEFAULT_SETTINGS: SpacePluginSettings = {
@@ -28,6 +30,7 @@ export const DEFAULT_SETTINGS: SpacePluginSettings = {
   autoSyncOnSave: false,
   lastSyncTime: null,
   lastSyncStats: null,
+  uploadedMedia: {},
 };
 
 export class SpaceSettingTab extends PluginSettingTab {
