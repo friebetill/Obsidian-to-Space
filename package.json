@@ -14,7 +14,7 @@
     "spaced-repetition",
     "space"
   ],
-  "author": "Space Team",
+  "author": "Till Friebe",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^16.11.6",
