@@ -59,17 +59,24 @@ export interface ParsedCard {
  * TARGET DECK can appear multiple times to assign cards to different decks.
  * Cards before any TARGET DECK use the default deck from settings.
  *
- * Note: Hash and deck metadata are stored in plugin settings, not in comments.
+ * Note: Fenced code blocks (```) are ignored to avoid parsing examples/templates.
+ * Hash and deck metadata are stored in plugin settings, not in comments.
  * Also supports legacy format: <!-- space-id: xxx hash:yyy deck:zzz -->
  */
 export function parseFlashcards(content: string): ParsedCard[] {
   const cards: ParsedCard[] = [];
 
+  // Remove fenced code blocks to avoid parsing example/template flashcards
+  // Replace with placeholder of same length to preserve positions
+  const contentWithoutCodeBlocks = content.replace(/```[\s\S]*?```/g, (match) =>
+    ' '.repeat(match.length)
+  );
+
   // First, find all TARGET DECK directives and their positions
   const deckDirectives: Array<{ position: number; deckName: string }> = [];
   const targetDeckPattern = /^TARGET DECK:\s*(.+)$/gim;
   let deckMatch;
-  while ((deckMatch = targetDeckPattern.exec(content)) !== null) {
+  while ((deckMatch = targetDeckPattern.exec(contentWithoutCodeBlocks)) !== null) {
     deckDirectives.push({
       position: deckMatch.index,
       deckName: deckMatch[1].trim(),
@@ -95,9 +102,14 @@ export function parseFlashcards(content: string): ParsedCard[] {
   const qaPattern = /Q:\s*([\s\S]*?)(?=\nA:)\nA:\s*([\s\S]*?)(?=\nQ:|\n\n\n|$)/gi;
 
   let match;
-  while ((match = qaPattern.exec(content)) !== null) {
-    const front = match[1].trim();
-    let back = match[2].trim();
+  while ((match = qaPattern.exec(contentWithoutCodeBlocks)) !== null) {
+    // Use original content at same positions (positions preserved since we used same-length replacement)
+    const originalMatch = content.substring(match.index, match.index + match[0].length);
+    const originalParsed = originalMatch.match(/Q:\s*([\s\S]*?)(?=\nA:)\nA:\s*([\s\S]*?)$/i);
+    if (!originalParsed) continue;
+
+    const front = originalParsed[1].trim();
+    let back = originalParsed[2].trim();
     let spaceId: string | null = null;
     let storedHash: string | null = null;
     let storedDeckName: string | null = null;
