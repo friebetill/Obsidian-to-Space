@@ -8,6 +8,12 @@ import {
 } from 'obsidian';
 import type ObsidianToSpacePlugin from './main';
 
+/** Metadata for a synced card, stored by spaceId */
+export interface CardMetadata {
+  contentHash: string;
+  deckName: string | null;
+}
+
 export interface SpacePluginSettings {
   apiEndpoint: string;
   token: string | null;
@@ -19,6 +25,8 @@ export interface SpacePluginSettings {
   lastSyncStats: { created: number; updated: number } | null;
   /** Cache of uploaded media: "path:hash" -> s3Url */
   uploadedMedia: Record<string, string>;
+  /** Card metadata: spaceId -> {contentHash, deckName} */
+  cardMetadata: Record<string, CardMetadata>;
 }
 
 export const DEFAULT_SETTINGS: SpacePluginSettings = {
@@ -31,6 +39,7 @@ export const DEFAULT_SETTINGS: SpacePluginSettings = {
   lastSyncTime: null,
   lastSyncStats: null,
   uploadedMedia: {},
+  cardMetadata: {},
 };
 
 export class SpaceSettingTab extends PluginSettingTab {

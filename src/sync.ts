@@ -109,7 +109,9 @@ export class SyncEngine {
     }
 
     // Track cards that need comment updates
-    const cardUpdates: Array<{ card: ParsedCard; spaceId: string; isNew: boolean; deckName: string | null }> = [];
+    const cardUpdates: Array<{ card: ParsedCard; spaceId: string; isNew: boolean }> = [];
+    // Track metadata updates for settings
+    const metadataUpdates: Array<{ spaceId: string; contentHash: string; deckName: string | null }> = [];
 
     // Process each deck group
     for (const [deckName, deckCards] of cardsByDeck) {
@@ -130,7 +132,33 @@ export class SyncEngine {
       const cardsToSync: Array<{ card: ParsedCard; isNew: boolean }> = [];
 
       for (const card of deckCards) {
-        if (card.spaceId && !card.hasChanged && !card.hasDeckChanged) {
+        // Look up stored metadata from settings if card has spaceId
+        let storedHash = card.storedHash;
+        let storedDeckName = card.storedDeckName;
+        const hasMetadataInSettings = card.spaceId && this.plugin.settings.cardMetadata[card.spaceId];
+
+        if (hasMetadataInSettings) {
+          const metadata = this.plugin.settings.cardMetadata[card.spaceId!];
+          storedHash = metadata.contentHash;
+          storedDeckName = metadata.deckName;
+        }
+
+        // Check if this is a legacy card that needs migration (has storedHash from parsing but not in settings)
+        const needsMigration = card.spaceId && card.storedHash && !hasMetadataInSettings;
+
+        const hasChanged = !storedHash || storedHash !== card.contentHash;
+        const hasDeckChanged = deckName !== storedDeckName;
+
+        if (needsMigration) {
+          // Migrate legacy card: update comment format and store metadata in settings
+          cardUpdates.push({ card, spaceId: card.spaceId!, isNew: false });
+          metadataUpdates.push({
+            spaceId: card.spaceId!,
+            contentHash: card.storedHash!,
+            deckName: card.storedDeckName,
+          });
+          result.skipped++; // Count as skipped since content didn't change
+        } else if (card.spaceId && !hasChanged && !hasDeckChanged) {
           // Card unchanged and in same deck, skip
           result.skipped++;
         } else {
@@ -190,7 +218,12 @@ export class SyncEngine {
               result.updated++;
             }
 
-            cardUpdates.push({ card, spaceId: syncedCard.id, isNew, deckName });
+            cardUpdates.push({ card, spaceId: syncedCard.id, isNew });
+            metadataUpdates.push({
+              spaceId: syncedCard.id,
+              contentHash: card.contentHash,
+              deckName,
+            });
           }
         } catch (error: any) {
           result.errors.push(`Error batch syncing cards to "${deckName || 'default'}": ${error.message}`);
@@ -198,13 +231,20 @@ export class SyncEngine {
       }
     }
 
-    // Update comments for synced cards (new cards get comments, updated cards get new hash)
+    // Update comments for synced cards and save metadata to settings
     if (cardUpdates.length > 0) {
       try {
+        // Update file with new id comments
         const updatedContent = updateSpaceComments(content, cardUpdates);
         await this.plugin.app.vault.modify(file, updatedContent);
+
+        // Save metadata to settings
+        for (const { spaceId, contentHash, deckName } of metadataUpdates) {
+          this.plugin.settings.cardMetadata[spaceId] = { contentHash, deckName };
+        }
+        await this.plugin.saveSettings();
       } catch (error: any) {
-        result.errors.push(`Error updating file with space-ids: ${error.message}`);
+        result.errors.push(`Error updating file with ids: ${error.message}`);
       }
     }
 

@@ -46,7 +46,7 @@ export interface ParsedCard {
  *
  *   Q: What is the capital of France?
  *   A: Paris
- *   <!-- space-id: cuid123 hash:abc123 -->
+ *   <!-- id: cuid123 -->
  *
  * Multi-line content is supported:
  *   Q: What are the primary colors?
@@ -54,10 +54,13 @@ export interface ParsedCard {
  *   - Red
  *   - Blue
  *   - Yellow
- *   <!-- space-id: cuid456 hash:def456 -->
+ *   <!-- id: cuid456 -->
  *
  * TARGET DECK can appear multiple times to assign cards to different decks.
  * Cards before any TARGET DECK use the default deck from settings.
+ *
+ * Note: Hash and deck metadata are stored in plugin settings, not in comments.
+ * Also supports legacy format: <!-- space-id: xxx hash:yyy deck:zzz -->
  */
 export function parseFlashcards(content: string): ParsedCard[] {
   const cards: ParsedCard[] = [];
@@ -99,14 +102,20 @@ export function parseFlashcards(content: string): ParsedCard[] {
     let storedHash: string | null = null;
     let storedDeckName: string | null = null;
 
-    // Check if there's a space-id comment at the end of the back content
-    // Format: <!-- space-id: xxx --> or <!-- space-id: xxx hash:yyy --> or <!-- space-id: xxx hash:yyy deck:zzz -->
-    const spaceIdMatch = back.match(/<!--\s*space-id:\s*(\S+)(?:\s+hash:(\S+))?(?:\s+deck:(.+?))?\s*-->$/);
-    if (spaceIdMatch) {
-      spaceId = spaceIdMatch[1];
-      storedHash = spaceIdMatch[2] || null;
-      storedDeckName = spaceIdMatch[3]?.trim() || null;
-      back = back.replace(/\s*<!--\s*space-id:\s*\S+(?:\s+hash:\S+)?(?:\s+deck:.+?)?\s*-->$/, '').trim();
+    // Check for new format: <!-- id: xxx -->
+    const newIdMatch = back.match(/<!--\s*id:\s*(\S+)\s*-->$/);
+    if (newIdMatch) {
+      spaceId = newIdMatch[1];
+      back = back.replace(/\s*<!--\s*id:\s*\S+\s*-->$/, '').trim();
+    } else {
+      // Check for legacy format: <!-- space-id: xxx hash:yyy deck:zzz -->
+      const legacyMatch = back.match(/<!--\s*space-id:\s*(\S+)(?:\s+hash:(\S+))?(?:\s+deck:(.+?))?\s*-->$/);
+      if (legacyMatch) {
+        spaceId = legacyMatch[1];
+        storedHash = legacyMatch[2] || null;
+        storedDeckName = legacyMatch[3]?.trim() || null;
+        back = back.replace(/\s*<!--\s*space-id:\s*\S+(?:\s+hash:\S+)?(?:\s+deck:.+?)?\s*-->$/, '').trim();
+      }
     }
 
     // Skip empty cards
@@ -189,36 +198,35 @@ function extractEmbeddedMedia(content: string): EmbeddedMedia[] {
 }
 
 /**
- * Generates the space-id comment to insert after a card
- * Includes content hash for change detection and deck name for deck tracking
+ * Generates the id comment to insert after a card
+ * Only contains the Space card ID - hash and deck are stored in settings
  */
-export function generateSpaceIdComment(spaceId: string, contentHash: string, deckName: string | null): string {
-  const deckPart = deckName ? ` deck:${deckName}` : '';
-  return `<!-- space-id: ${spaceId} hash:${contentHash}${deckPart} -->`;
+export function generateIdComment(spaceId: string): string {
+  return `<!-- id: ${spaceId} -->`;
 }
 
 /**
- * Inserts or updates space-id comments in the content for synced cards
+ * Inserts or updates id comments in the content for synced cards
  * Returns the modified content
  *
  * Format:
  *   Q: Question
  *   A: Answer
- *   <!-- space-id: xxx hash:yyy deck:DeckName -->
+ *   <!-- id: xxx -->
  *
  *   Q: Next question
  */
 export function updateSpaceComments(
   content: string,
-  cardUpdates: Array<{ card: ParsedCard; spaceId: string; isNew: boolean; deckName: string | null }>
+  cardUpdates: Array<{ card: ParsedCard; spaceId: string; isNew: boolean }>
 ): string {
   // Sort by position descending so we can modify from end to start
   // without messing up positions
   const sorted = [...cardUpdates].sort((a, b) => b.card.endPosition - a.card.endPosition);
 
   let result = content;
-  for (const { card, spaceId, isNew, deckName } of sorted) {
-    const comment = generateSpaceIdComment(spaceId, card.contentHash, deckName);
+  for (const { card, spaceId, isNew } of sorted) {
+    const comment = generateIdComment(spaceId);
 
     if (isNew) {
       // Insert new comment
@@ -230,9 +238,9 @@ export function updateSpaceComments(
       const separator = trimmedAfter.length > 0 ? '\n\n' : '\n';
       result = trimmedBefore + '\n' + comment + separator + trimmedAfter;
     } else {
-      // Update existing comment with new hash and deck
-      // Find the LAST occurrence of the comment pattern (the one for this card)
-      const oldCommentPattern = /<!--\s*space-id:\s*\S+(?:\s+hash:\S+)?(?:\s+deck:.+?)?\s*-->/g;
+      // Update existing comment (supports both new and legacy formats)
+      // Find the LAST occurrence of either comment pattern
+      const oldCommentPattern = /<!--\s*(?:id:\s*\S+|space-id:\s*\S+(?:\s+hash:\S+)?(?:\s+deck:.+?)?)\s*-->/g;
       const beforeCard = result.substring(0, card.endPosition);
       const afterCard = result.substring(card.endPosition);
 
