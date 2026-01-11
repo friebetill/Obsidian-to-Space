@@ -1,4 +1,4 @@
-import { TFile, Notice } from 'obsidian';
+import { TFile } from 'obsidian';
 import type ObsidianToSpacePlugin from './main';
 import { SpaceApiClient } from './space-api';
 import { parseFlashcards, updateSpaceComments, ParsedCard } from './parser';
@@ -52,8 +52,8 @@ export class SyncEngine {
         result.updated += fileResult.updated;
         result.skipped += fileResult.skipped;
         result.errors.push(...fileResult.errors);
-      } catch (error: any) {
-        result.errors.push(`Error syncing ${file.path}: ${error.message}`);
+      } catch (error) {
+        result.errors.push(`Error syncing ${file.path}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
 
@@ -122,8 +122,8 @@ export class SyncEngine {
       } else {
         try {
           deckId = await this.resolveDeckId(deckName);
-        } catch (error: any) {
-          result.errors.push(`Error resolving deck "${deckName}": ${error.message}`);
+        } catch (error) {
+          result.errors.push(`Error resolving deck "${deckName}": ${error instanceof Error ? error.message : 'Unknown error'}`);
           continue;
         }
       }
@@ -225,8 +225,8 @@ export class SyncEngine {
               deckName,
             });
           }
-        } catch (error: any) {
-          result.errors.push(`Error batch syncing cards to "${deckName || 'default'}": ${error.message}`);
+        } catch (error) {
+          result.errors.push(`Error batch syncing cards to "${deckName || 'default'}": ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
     }
@@ -243,8 +243,8 @@ export class SyncEngine {
           this.plugin.settings.cardMetadata[spaceId] = { contentHash, deckName };
         }
         await this.plugin.saveSettings();
-      } catch (error: any) {
-        result.errors.push(`Error updating file with ids: ${error.message}`);
+      } catch (error) {
+        result.errors.push(`Error updating file with ids: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
 

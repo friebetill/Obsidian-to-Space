@@ -24,27 +24,25 @@ export default class ObsidianToSpacePlugin extends Plugin {
     // Add command: Sync all flashcards
     this.addCommand({
       id: 'sync-all-flashcards',
-      name: 'Sync all flashcards to Space',
+      name: 'Sync all flashcards',
       callback: () => this.syncAllFlashcards(),
     });
 
     // Add command: Sync current file
     this.addCommand({
       id: 'sync-current-file',
-      name: 'Sync current file to Space',
+      name: 'Sync current file',
       callback: () => this.syncCurrentFile(),
     });
 
     // Add ribbon icon
     this.addRibbonIcon('upload-cloud', 'Sync to Space', () => {
-      this.syncAllFlashcards();
+      void this.syncAllFlashcards();
     });
-
-    console.log('Obsidian to Space plugin loaded!');
   }
 
   onunload() {
-    console.log('Obsidian to Space plugin unloaded');
+    // Plugin cleanup
   }
 
   async loadSettings() {
@@ -67,7 +65,7 @@ export default class ObsidianToSpacePlugin extends Plugin {
       new Notice(`Synced ${result.created} new, ${result.updated} updated cards to Space!`);
     } catch (error) {
       console.error('Sync failed:', error);
-      new Notice(`Sync failed: ${error.message}`);
+      new Notice(`Sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -94,7 +92,7 @@ export default class ObsidianToSpacePlugin extends Plugin {
       new Notice(`Synced ${result.created} new, ${result.updated} updated cards!`);
     } catch (error) {
       console.error('Sync failed:', error);
-      new Notice(`Sync failed: ${error.message}`);
+      new Notice(`Sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

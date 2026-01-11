@@ -54,10 +54,8 @@ export class SpaceSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl('h1', { text: 'Obsidian to Space' });
-
-    // Account Section
-    containerEl.createEl('h2', { text: 'Account' });
+    // Account section
+    new Setting(containerEl).setName('Account').setHeading();
 
     if (this.plugin.settings.token) {
       // Logged in state
@@ -96,8 +94,8 @@ export class SpaceSettingTab extends PluginSettingTab {
         );
     }
 
-    // Sync Settings Section
-    containerEl.createEl('h2', { text: 'Sync Settings' });
+    // Sync settings section
+    new Setting(containerEl).setName('Sync settings').setHeading();
 
     new Setting(containerEl)
       .setName('Default deck name')
@@ -126,8 +124,8 @@ export class SpaceSettingTab extends PluginSettingTab {
           })
       );
 
-    // Manual Sync Section
-    containerEl.createEl('h2', { text: 'Manual Sync' });
+    // Manual sync section
+    new Setting(containerEl).setName('Manual sync').setHeading();
 
     new Setting(containerEl)
       .setName('Sync all flashcards')
@@ -143,11 +141,11 @@ export class SpaceSettingTab extends PluginSettingTab {
           })
       );
 
-    // API Settings (Advanced)
-    containerEl.createEl('h2', { text: 'Advanced' });
+    // Advanced section
+    new Setting(containerEl).setName('Advanced').setHeading();
 
     new Setting(containerEl)
-      .setName('API Endpoint')
+      .setName('API endpoint')
       .setDesc('Space API endpoint (only change if self-hosting)')
       .addText((text) =>
         text
@@ -163,19 +161,17 @@ export class SpaceSettingTab extends PluginSettingTab {
       );
 
     // Help section
-    containerEl.createEl('h2', { text: 'How to use' });
-    const helpDiv = containerEl.createDiv();
-    helpDiv.innerHTML = `
-      <p>Add flashcards to your notes using the <code>Q:</code> and <code>A:</code> format:</p>
-      <pre style="background: var(--background-secondary); padding: 10px; border-radius: 5px;">
-Q: What is the capital of France?
-A: Paris
+    new Setting(containerEl).setName('How to use').setHeading();
 
-Q: What year did WWII end?
-A: 1945
-      </pre>
-      <p>Then run the command <strong>"Sync all flashcards to Space"</strong> or click the cloud icon in the ribbon.</p>
-    `;
+    new Setting(containerEl)
+      .setDesc('Add flashcards to your notes using the Q: and A: format, then run "Sync all flashcards" or click the cloud icon.');
+
+    const exampleEl = containerEl.createDiv({ cls: 'setting-item' });
+    const exampleCode = exampleEl.createEl('pre');
+    exampleCode.style.background = 'var(--background-secondary)';
+    exampleCode.style.padding = '10px';
+    exampleCode.style.borderRadius = '5px';
+    exampleCode.setText('Q: What is the capital of France?\nA: Paris\n\nQ: What year did WWII end?\nA: 1945');
   }
 
   private getLastSyncDescription(): string {
@@ -220,7 +216,7 @@ class LoginModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    contentEl.createEl('h2', { text: 'Login to Space' });
+    new Setting(contentEl).setName('Login to Space').setHeading();
 
     let emailInput: TextComponent;
     let passwordInput: TextComponent;
@@ -263,8 +259,8 @@ class LoginModal extends Modal {
             new Notice('Successfully logged in to Space!');
             this.close();
             this.onSuccess();
-          } catch (error: any) {
-            new Notice(`Login failed: ${error.message}`);
+          } catch (error) {
+            new Notice(`Login failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
             btn.setDisabled(false);
             btn.setButtonText('Login');
           }
@@ -294,7 +290,7 @@ class SignUpModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    contentEl.createEl('h2', { text: 'Create Space Account' });
+    new Setting(contentEl).setName('Create Space account').setHeading();
 
     let firstNameInput: TextComponent;
     let lastNameInput: TextComponent;
@@ -361,8 +357,8 @@ class SignUpModal extends Modal {
             new Notice('Account created! Welcome to Space!');
             this.close();
             this.onSuccess();
-          } catch (error: any) {
-            new Notice(`Sign up failed: ${error.message}`);
+          } catch (error) {
+            new Notice(`Sign up failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
             btn.setDisabled(false);
             btn.setButtonText('Create Account');
           }

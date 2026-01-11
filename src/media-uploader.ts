@@ -114,7 +114,7 @@ export async function getOrUploadMedia(
     await saveSettings();
 
     return { success: true, url: presignedData.publicUrl };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }

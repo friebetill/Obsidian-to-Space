@@ -330,11 +330,12 @@ export class SpaceApiClient {
       });
 
       return response.json;
-    } catch (error: any) {
-      if (error.status === 401) {
+    } catch (error) {
+      const err = error as { status?: number; message?: string };
+      if (err.status === 401) {
         throw new Error('Session expired. Please log in again.');
       }
-      throw new Error(`API request failed: ${error.message}`);
+      throw new Error(`API request failed: ${err.message || 'Unknown error'}`);
     }
   }
 }
