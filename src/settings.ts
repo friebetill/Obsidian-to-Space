@@ -88,21 +88,21 @@ export class SpaceSettingTab extends PluginSettingTab {
             })
         )
         .addButton((btn) =>
-          btn.setButtonText('Create Account').onClick(() => {
+          btn.setButtonText('Create account').onClick(() => {
             new SignUpModal(this.app, this.plugin, () => this.display()).open();
           })
         );
     }
 
     // Sync settings section
-    new Setting(containerEl).setName('Sync settings').setHeading();
+    new Setting(containerEl).setName('Sync').setHeading();
 
     new Setting(containerEl)
       .setName('Default deck name')
       .setDesc('Name for the deck where flashcards will be synced')
       .addText((text) =>
         text
-          .setPlaceholder('Obsidian Flashcards')
+          .setPlaceholder('Obsidian flashcards')
           .setValue(this.plugin.settings.defaultDeckName)
           .onChange(async (value) => {
             this.plugin.settings.defaultDeckName = value || 'Obsidian Flashcards';
@@ -132,7 +132,7 @@ export class SpaceSettingTab extends PluginSettingTab {
       .setDesc(this.getLastSyncDescription())
       .addButton((btn) =>
         btn
-          .setButtonText('Sync Now')
+          .setButtonText('Sync now')
           .setCta()
           .setDisabled(!this.plugin.settings.token)
           .onClick(async () => {
@@ -167,10 +167,7 @@ export class SpaceSettingTab extends PluginSettingTab {
       .setDesc('Add flashcards to your notes using the Q: and A: format, then run "Sync all flashcards" or click the cloud icon.');
 
     const exampleEl = containerEl.createDiv({ cls: 'setting-item' });
-    const exampleCode = exampleEl.createEl('pre');
-    exampleCode.style.background = 'var(--background-secondary)';
-    exampleCode.style.padding = '10px';
-    exampleCode.style.borderRadius = '5px';
+    const exampleCode = exampleEl.createEl('pre', { cls: 'space-example-code' });
     exampleCode.setText('Q: What is the capital of France?\nA: Paris\n\nQ: What year did WWII end?\nA: 1945');
   }
 
@@ -216,7 +213,7 @@ class LoginModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    new Setting(contentEl).setName('Login to Space').setHeading();
+    new Setting(contentEl).setName('Log in to Space').setHeading();
 
     let emailInput: TextComponent;
     let passwordInput: TextComponent;
@@ -320,7 +317,7 @@ class SignUpModal extends Modal {
 
     new Setting(contentEl).addButton((btn) =>
       btn
-        .setButtonText('Create Account')
+        .setButtonText('Create account')
         .setCta()
         .onClick(async () => {
           const firstName = firstNameInput.getValue();
@@ -360,7 +357,7 @@ class SignUpModal extends Modal {
           } catch (error) {
             new Notice(`Sign up failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
             btn.setDisabled(false);
-            btn.setButtonText('Create Account');
+            btn.setButtonText('Create account');
           }
         })
     );

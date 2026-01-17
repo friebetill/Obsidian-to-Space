@@ -22,6 +22,11 @@ export interface SpaceDeck {
   description?: string;
 }
 
+interface GraphQLResponse {
+  data?: Record<string, unknown>;
+  errors?: Array<{ message: string }>;
+}
+
 /**
  * GraphQL client for the Space API
  * Uses Obsidian's requestUrl to bypass CORS restrictions
@@ -77,7 +82,7 @@ export class SpaceApiClient {
       throw new Error(result.errors[0]?.message || 'Login failed');
     }
 
-    return result.data.login;
+    return (result.data as { login: AuthPayload }).login;
   }
 
   /**
@@ -114,7 +119,7 @@ export class SpaceApiClient {
       throw new Error(result.errors[0]?.message || 'Sign up failed');
     }
 
-    return result.data.signUp;
+    return (result.data as { signUp: AuthPayload }).signUp;
   }
 
   /**
@@ -142,7 +147,7 @@ export class SpaceApiClient {
       throw new Error(result.errors[0]?.message || 'Failed to create/update deck');
     }
 
-    return result.data.upsertDeck;
+    return (result.data as { upsertDeck: SpaceDeck }).upsertDeck;
   }
 
   /**
@@ -175,7 +180,7 @@ export class SpaceApiClient {
       throw new Error(result.errors[0]?.message || 'Failed to create/update card');
     }
 
-    return result.data.upsertCard;
+    return (result.data as { upsertCard: SpaceCard }).upsertCard;
   }
 
   /**
@@ -208,7 +213,7 @@ export class SpaceApiClient {
       throw new Error(result.errors[0]?.message || 'Failed to batch create/update cards');
     }
 
-    return result.data.upsertCards;
+    return (result.data as { upsertCards: SpaceCard[] }).upsertCards;
   }
 
   /**
@@ -251,7 +256,7 @@ export class SpaceApiClient {
     }
 
     // The API returns a JSON string that we need to parse
-    return JSON.parse(result.data.getPreSignedS3PutUrl);
+    return JSON.parse((result.data as { getPreSignedS3PutUrl: string }).getPreSignedS3PutUrl);
   }
 
   /**
@@ -276,7 +281,7 @@ export class SpaceApiClient {
       throw new Error(result.errors[0]?.message || 'Failed to search decks');
     }
 
-    return result.data.searchDecks.nodes;
+    return (result.data as { searchDecks: { nodes: SpaceDeck[] } }).searchDecks.nodes;
   }
 
   /**
@@ -284,8 +289,8 @@ export class SpaceApiClient {
    */
   private async executeGraphQLWithRateLimit(
     query: string,
-    variables: Record<string, any>
-  ): Promise<any> {
+    variables: Record<string, unknown>
+  ): Promise<GraphQLResponse> {
     // Check rate limit
     const now = Date.now();
     if (now - this.windowStart > this.WINDOW_MS) {
@@ -311,8 +316,8 @@ export class SpaceApiClient {
    */
   private async executeGraphQL(
     query: string,
-    variables: Record<string, any>
-  ): Promise<any> {
+    variables: Record<string, unknown>
+  ): Promise<GraphQLResponse> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };

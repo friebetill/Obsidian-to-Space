@@ -260,10 +260,11 @@ export function updateSpaceComments(
       const matches = [...beforeCard.matchAll(oldCommentPattern)];
       if (matches.length > 0) {
         const lastMatch = matches[matches.length - 1];
+        const matchIndex = lastMatch.index ?? 0;
         const updatedBefore =
-          beforeCard.substring(0, lastMatch.index) +
+          beforeCard.substring(0, matchIndex) +
           comment +
-          beforeCard.substring(lastMatch.index! + lastMatch[0].length);
+          beforeCard.substring(matchIndex + lastMatch[0].length);
         result = updatedBefore + afterCard;
       }
     }
