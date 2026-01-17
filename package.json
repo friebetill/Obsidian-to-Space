@@ -1,6 +1,6 @@
 {
   "name": "obsidian-to-space",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Sync your Obsidian flashcards to Space for spaced repetition learning",
   "main": "main.js",
   "scripts": {
