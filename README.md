@@ -1,4 +1,4 @@
-# Obsidian to Space
+# Space Flashcards
 
 Sync your flashcards from [Obsidian](https://obsidian.md) to [Space](https://getspace.app) for spaced repetition learning on any device.
 
@@ -16,7 +16,7 @@ Sync your flashcards from [Obsidian](https://obsidian.md) to [Space](https://get
 ### From Obsidian Community Plugins (coming soon)
 
 1. Open Obsidian Settings → Community Plugins
-2. Search for "Obsidian to Space"
+2. Search for "Space Flashcards"
 3. Click Install, then Enable
 
 ### Manual Installation
@@ -30,7 +30,7 @@ Sync your flashcards from [Obsidian](https://obsidian.md) to [Space](https://get
 
 ### 1. Create an Account
 
-1. Open Settings → Obsidian to Space
+1. Open Settings → Space Flashcards
 2. Click "Create Account" or "Login"
 3. Enter your credentials
 

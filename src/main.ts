@@ -55,7 +55,7 @@ export default class ObsidianToSpacePlugin extends Plugin {
 
   async syncAllFlashcards() {
     if (!this.settings.token) {
-      new Notice('Please log in to Space first (Settings → Obsidian to Space)');
+      new Notice('Please log in to Space first (Settings → Space Flashcards)');
       return;
     }
 
@@ -71,7 +71,7 @@ export default class ObsidianToSpacePlugin extends Plugin {
 
   async syncCurrentFile() {
     if (!this.settings.token) {
-      new Notice('Please log in to Space first (Settings → Obsidian to Space)');
+      new Notice('Please log in to Space first (Settings → Space Flashcards)');
       return;
     }
 
