@@ -22,6 +22,11 @@ export interface SpaceDeck {
   description?: string;
 }
 
+export interface SpaceGroup {
+  id: string;
+  name: string;
+}
+
 interface GraphQLResponse {
   data?: Record<string, unknown>;
   errors?: Array<{ message: string }>;
@@ -188,11 +193,12 @@ export class SpaceApiClient {
    */
   async upsertCards(
     deckId: string,
-    cards: Array<{ front: string; back: string; id?: string }>
+    cards: Array<{ front: string; back: string; id?: string }>,
+    groupId?: string
   ): Promise<SpaceCard[]> {
     const query = `
-      mutation UpsertCards($deckId: ID!, $cards: [CardInput!]!) {
-        upsertCards(deckId: $deckId, cards: $cards) {
+      mutation UpsertCards($deckId: ID!, $cards: [CardInput!]!, $groupId: ID) {
+        upsertCards(deckId: $deckId, cards: $cards, groupId: $groupId) {
           id
           front
           back
@@ -207,6 +213,7 @@ export class SpaceApiClient {
         front: c.front,
         back: c.back,
       })),
+      groupId: groupId || null,
     });
 
     if (result.errors) {
@@ -214,6 +221,52 @@ export class SpaceApiClient {
     }
 
     return (result.data as { upsertCards: SpaceCard[] }).upsertCards;
+  }
+
+  /**
+   * Get all groups for a deck
+   */
+  async getGroupsForDeck(deckId: string): Promise<SpaceGroup[]> {
+    const query = `
+      query GetDeckGroups($id: ID!) {
+        deck(id: $id) {
+          groups {
+            id
+            name
+          }
+        }
+      }
+    `;
+
+    const result = await this.executeGraphQL(query, { id: deckId });
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to get deck groups');
+    }
+
+    return (result.data as { deck: { groups: SpaceGroup[] } }).deck.groups;
+  }
+
+  /**
+   * Create a new group in a deck
+   */
+  async createGroup(deckId: string, name: string): Promise<SpaceGroup> {
+    const query = `
+      mutation CreateGroup($deckId: ID!, $name: String!) {
+        createGroup(deckId: $deckId, name: $name) {
+          id
+          name
+        }
+      }
+    `;
+
+    const result = await this.executeGraphQLWithRateLimit(query, { deckId, name });
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to create group');
+    }
+
+    return (result.data as { createGroup: SpaceGroup }).createGroup;
   }
 
   /**

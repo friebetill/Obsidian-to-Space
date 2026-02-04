@@ -34,6 +34,12 @@ export interface ParsedCard {
   storedDeckName: string | null;
   /** Whether the deck assignment has changed since last sync */
   hasDeckChanged: boolean;
+  /** CardGroup name from TARGET DECK directive (null = no group) */
+  groupName: string | null;
+  /** Group name stored from last sync (null = no group) */
+  storedGroupName: string | null;
+  /** Whether the group assignment has changed since last sync */
+  hasGroupChanged: boolean;
   /** Embedded media files (videos, images) in the card */
   embeddedMedia: EmbeddedMedia[];
 }
@@ -73,27 +79,42 @@ export function parseFlashcards(content: string): ParsedCard[] {
   );
 
   // First, find all TARGET DECK directives and their positions
-  const deckDirectives: Array<{ position: number; deckName: string }> = [];
+  // Format: TARGET DECK: DeckName or TARGET DECK: DeckName:GroupName
+  const deckDirectives: Array<{ position: number; deckName: string; groupName: string | null }> = [];
   const targetDeckPattern = /^TARGET DECK:\s*(.+)$/gim;
   let deckMatch;
   while ((deckMatch = targetDeckPattern.exec(contentWithoutCodeBlocks)) !== null) {
+    const rawValue = deckMatch[1].trim();
+    // Split by first colon to separate deck name from group name
+    const colonIndex = rawValue.indexOf(':');
+    let deckName: string;
+    let groupName: string | null = null;
+    if (colonIndex !== -1) {
+      deckName = rawValue.substring(0, colonIndex).trim();
+      groupName = rawValue.substring(colonIndex + 1).trim() || null;
+    } else {
+      deckName = rawValue;
+    }
     deckDirectives.push({
       position: deckMatch.index,
-      deckName: deckMatch[1].trim(),
+      deckName,
+      groupName,
     });
   }
 
-  // Helper to find the deck name for a given position
-  const getDeckNameForPosition = (position: number): string | null => {
+  // Helper to find the deck and group name for a given position
+  const getDeckInfoForPosition = (position: number): { deckName: string | null; groupName: string | null } => {
     let currentDeck: string | null = null;
+    let currentGroup: string | null = null;
     for (const directive of deckDirectives) {
       if (directive.position < position) {
         currentDeck = directive.deckName;
+        currentGroup = directive.groupName;
       } else {
         break;
       }
     }
-    return currentDeck;
+    return { deckName: currentDeck, groupName: currentGroup };
   };
 
   // Regex to match Q: ... A: ... patterns with optional space-id comment
@@ -134,7 +155,7 @@ export function parseFlashcards(content: string): ParsedCard[] {
     if (!front || !back) continue;
 
     const contentHash = generateHash(front + '||' + back);
-    const deckName = getDeckNameForPosition(match.index);
+    const { deckName, groupName } = getDeckInfoForPosition(match.index);
 
     // Extract embedded media from both front and back
     const frontMedia = extractEmbeddedMedia(front);
@@ -153,6 +174,9 @@ export function parseFlashcards(content: string): ParsedCard[] {
       deckName,
       storedDeckName,
       hasDeckChanged: deckName !== storedDeckName,
+      groupName,
+      storedGroupName: null, // Will be populated from settings in sync.ts
+      hasGroupChanged: false, // Will be calculated in sync.ts
       embeddedMedia,
     };
 

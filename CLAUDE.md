@@ -23,15 +23,15 @@ npm run version          # Bump version in manifest.json and versions.json
 
 - **main.ts** - Plugin entry point. Registers commands ("Sync all flashcards", "Sync current file") and ribbon icon. Initializes `SpaceApiClient` and `SyncEngine`.
 
-- **parser.ts** - Parses `Q:` / `A:` flashcards from markdown content. Handles `TARGET DECK:` directives for multi-deck support. Extracts embedded media (`![[file]]` syntax). Generates content hashes for change detection. Ignores flashcards inside fenced code blocks.
+- **parser.ts** - Parses `Q:` / `A:` flashcards from markdown content. Handles `TARGET DECK:` directives for multi-deck and CardGroup support. Extracts embedded media (`![[file]]` syntax). Generates content hashes for change detection. Ignores flashcards inside fenced code blocks.
 
-- **sync.ts** - `SyncEngine` orchestrates syncing. Reads files via Obsidian Vault API, calls parser, resolves deck names to IDs (creating decks if needed), uploads media, calls API to upsert cards, and updates files with `<!-- id: xxx -->` tracking comments.
+- **sync.ts** - `SyncEngine` orchestrates syncing. Reads files via Obsidian Vault API, calls parser, resolves deck/group names to IDs (creating decks/groups if needed), uploads media, calls API to upsert cards, and updates files with `<!-- id: xxx -->` tracking comments.
 
-- **space-api.ts** - GraphQL client using Obsidian's `requestUrl` (bypasses CORS). Handles auth (login/signup), deck operations (`upsertDeck`, `searchDecks`), card operations (`upsertCard`, `upsertCards`, `deleteCard`), and S3 pre-signed URLs for media upload. Includes rate limiting (20 requests per 5 seconds).
+- **space-api.ts** - GraphQL client using Obsidian's `requestUrl` (bypasses CORS). Handles auth (login/signup), deck operations (`upsertDeck`, `searchDecks`), group operations (`getGroupsForDeck`, `createGroup`), card operations (`upsertCard`, `upsertCards`, `deleteCard`), and S3 pre-signed URLs for media upload. Includes rate limiting (20 requests per 5 seconds).
 
 - **media-uploader.ts** - Uploads images/videos to S3 via pre-signed URLs. Caches uploaded media by `path:hash` to avoid re-uploading unchanged files.
 
-- **settings.ts** - Plugin settings tab with login/signup modals. Stores auth token, deck config, and card metadata (content hashes, deck assignments) in Obsidian's data store.
+- **settings.ts** - Plugin settings tab with login/signup modals. Stores auth token, deck config, and card metadata (content hashes, deck/group assignments) in Obsidian's data store.
 
 ### Flashcard Format
 
@@ -43,8 +43,19 @@ A: Answer text (can be multi-line)
 <!-- id: cuid123 -->
 ```
 
+With CardGroup support:
+```markdown
+TARGET DECK: Spanish Vocabulary:Spanish to German
+
+Q: Hola
+A: Hallo
+<!-- id: cuid456 -->
+```
+
+- `TARGET DECK: DeckName` - assigns cards to a deck (no group)
+- `TARGET DECK: DeckName:GroupName` - assigns cards to a deck and CardGroup within it
 - Cards are tracked via `<!-- id: xxx -->` comments (inserted after sync)
-- Card metadata (content hash, deck name) stored in plugin settings, not in comments
+- Card metadata (content hash, deck name, group name) stored in plugin settings, not in comments
 - Legacy format `<!-- space-id: xxx hash:yyy deck:zzz -->` is auto-migrated
 
 ### Build Output

@@ -19,6 +19,8 @@ export class SyncEngine {
   private apiClient: SpaceApiClient;
   /** Cache of deck name -> deck ID resolved during sync */
   private deckIdCache: Map<string, string> = new Map();
+  /** Cache of `${deckId}:${groupName}` -> group ID resolved during sync */
+  private groupIdCache: Map<string, string> = new Map();
 
   constructor(plugin: ObsidianToSpacePlugin, apiClient: SpaceApiClient) {
     this.plugin = plugin;
@@ -36,8 +38,9 @@ export class SyncEngine {
       errors: [],
     };
 
-    // Clear deck cache at start of sync
+    // Clear caches at start of sync
     this.deckIdCache.clear();
+    this.groupIdCache.clear();
 
     // Ensure we have a default deck to sync to
     await this.ensureDefaultDeck();
@@ -98,23 +101,24 @@ export class SyncEngine {
       return result;
     }
 
-    // Group cards by deck name (null = default deck)
-    const cardsByDeck = new Map<string | null, ParsedCard[]>();
+    // Group cards by deck name AND group name
+    // Key format: `${deckName ?? '__default__'}::${groupName ?? '__nogroup__'}`
+    const cardsByDeckAndGroup = new Map<string, { deckName: string | null; groupName: string | null; cards: ParsedCard[] }>();
     for (const card of cards) {
-      const deckKey = card.deckName;
-      if (!cardsByDeck.has(deckKey)) {
-        cardsByDeck.set(deckKey, []);
+      const key = `${card.deckName ?? '__default__'}::${card.groupName ?? '__nogroup__'}`;
+      if (!cardsByDeckAndGroup.has(key)) {
+        cardsByDeckAndGroup.set(key, { deckName: card.deckName, groupName: card.groupName, cards: [] });
       }
-      cardsByDeck.get(deckKey)!.push(card);
+      cardsByDeckAndGroup.get(key)!.cards.push(card);
     }
 
     // Track cards that need comment updates
     const cardUpdates: Array<{ card: ParsedCard; spaceId: string; isNew: boolean }> = [];
     // Track metadata updates for settings
-    const metadataUpdates: Array<{ spaceId: string; contentHash: string; deckName: string | null }> = [];
+    const metadataUpdates: Array<{ spaceId: string; contentHash: string; deckName: string | null; groupName: string | null }> = [];
 
-    // Process each deck group
-    for (const [deckName, deckCards] of cardsByDeck) {
+    // Process each deck/group combination
+    for (const [, { deckName, groupName, cards: groupCards }] of cardsByDeckAndGroup) {
       // Resolve deck ID
       let deckId: string;
       if (deckName === null) {
@@ -128,19 +132,32 @@ export class SyncEngine {
         }
       }
 
+      // Resolve group ID if groupName is set
+      let groupId: string | undefined;
+      if (groupName) {
+        try {
+          groupId = await this.resolveGroupId(deckId, groupName);
+        } catch (error) {
+          result.errors.push(`Error resolving group "${groupName}" in deck "${deckName || 'default'}": ${error instanceof Error ? error.message : 'Unknown error'}`);
+          continue;
+        }
+      }
+
       // Separate cards into those that need syncing and those to skip
       const cardsToSync: Array<{ card: ParsedCard; isNew: boolean }> = [];
 
-      for (const card of deckCards) {
+      for (const card of groupCards) {
         // Look up stored metadata from settings if card has spaceId
         let storedHash = card.storedHash;
         let storedDeckName = card.storedDeckName;
+        let storedGroupName: string | null = null;
         const hasMetadataInSettings = card.spaceId && this.plugin.settings.cardMetadata[card.spaceId];
 
         if (hasMetadataInSettings) {
           const metadata = this.plugin.settings.cardMetadata[card.spaceId!];
           storedHash = metadata.contentHash;
           storedDeckName = metadata.deckName;
+          storedGroupName = metadata.groupName;
         }
 
         // Check if this is a legacy card that needs migration (has storedHash from parsing but not in settings)
@@ -148,6 +165,7 @@ export class SyncEngine {
 
         const hasChanged = !storedHash || storedHash !== card.contentHash;
         const hasDeckChanged = deckName !== storedDeckName;
+        const hasGroupChanged = groupName !== storedGroupName;
 
         if (needsMigration) {
           // Migrate legacy card: update comment format and store metadata in settings
@@ -156,10 +174,11 @@ export class SyncEngine {
             spaceId: card.spaceId!,
             contentHash: card.storedHash!,
             deckName: card.storedDeckName,
+            groupName: null, // Legacy cards didn't have groups
           });
           result.skipped++; // Count as skipped since content didn't change
-        } else if (card.spaceId && !hasChanged && !hasDeckChanged) {
-          // Card unchanged and in same deck, skip
+        } else if (card.spaceId && !hasChanged && !hasDeckChanged && !hasGroupChanged) {
+          // Card unchanged and in same deck/group, skip
           result.skipped++;
         } else {
           cardsToSync.push({ card, isNew: !card.spaceId });
@@ -205,7 +224,7 @@ export class SyncEngine {
             })
           );
 
-          const syncedCards = await this.apiClient.upsertCards(deckId, batchInput);
+          const syncedCards = await this.apiClient.upsertCards(deckId, batchInput, groupId);
 
           // Map results back to original cards
           for (let i = 0; i < cardsToSync.length; i++) {
@@ -223,10 +242,11 @@ export class SyncEngine {
               spaceId: syncedCard.id,
               contentHash: card.contentHash,
               deckName,
+              groupName,
             });
           }
         } catch (error) {
-          result.errors.push(`Error batch syncing cards to "${deckName || 'default'}": ${error instanceof Error ? error.message : 'Unknown error'}`);
+          result.errors.push(`Error batch syncing cards to "${deckName || 'default'}${groupName ? `:${groupName}` : ''}": ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
     }
@@ -239,8 +259,8 @@ export class SyncEngine {
         await this.plugin.app.vault.modify(file, updatedContent);
 
         // Save metadata to settings
-        for (const { spaceId, contentHash, deckName } of metadataUpdates) {
-          this.plugin.settings.cardMetadata[spaceId] = { contentHash, deckName };
+        for (const { spaceId, contentHash, deckName, groupName } of metadataUpdates) {
+          this.plugin.settings.cardMetadata[spaceId] = { contentHash, deckName, groupName };
         }
         await this.plugin.saveSettings();
       } catch (error) {
@@ -279,6 +299,38 @@ export class SyncEngine {
     // Cache the result
     this.deckIdCache.set(deckName, deckId);
     return deckId;
+  }
+
+  /**
+   * Resolve a group name to a group ID within a deck, creating if necessary
+   * Results are cached for the duration of the sync
+   */
+  private async resolveGroupId(deckId: string, groupName: string): Promise<string> {
+    const cacheKey = `${deckId}:${groupName}`;
+
+    // Check cache first
+    if (this.groupIdCache.has(cacheKey)) {
+      return this.groupIdCache.get(cacheKey)!;
+    }
+
+    // Try to find existing group with this name
+    const existingGroups = await this.apiClient.getGroupsForDeck(deckId);
+    const matchingGroup = existingGroups.find(
+      (g) => g.name.toLowerCase() === groupName.toLowerCase()
+    );
+
+    let groupId: string;
+    if (matchingGroup) {
+      groupId = matchingGroup.id;
+    } else {
+      // Create new group
+      const newGroup = await this.apiClient.createGroup(deckId, groupName);
+      groupId = newGroup.id;
+    }
+
+    // Cache the result
+    this.groupIdCache.set(cacheKey, groupId);
+    return groupId;
   }
 
   /**

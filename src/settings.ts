@@ -12,6 +12,7 @@ import type ObsidianToSpacePlugin from './main';
 export interface CardMetadata {
   contentHash: string;
   deckName: string | null;
+  groupName: string | null;
 }
 
 export interface SpacePluginSettings {
