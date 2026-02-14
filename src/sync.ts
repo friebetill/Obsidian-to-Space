@@ -1,7 +1,7 @@
 import { TFile } from 'obsidian';
 import type ObsidianToSpacePlugin from './main';
 import { SpaceApiClient } from './space-api';
-import { parseFlashcards, updateSpaceComments, ParsedCard } from './parser';
+import { parseFlashcards, updateSpaceComments, ParsedCard, isFileOrdered } from './parser';
 import { getOrUploadMedia } from './media-uploader';
 
 export interface SyncResult {
@@ -116,6 +116,9 @@ export class SyncEngine {
     const cardUpdates: Array<{ card: ParsedCard; spaceId: string; isNew: boolean }> = [];
     // Track metadata updates for settings
     const metadataUpdates: Array<{ spaceId: string; contentHash: string; deckName: string | null; groupName: string | null }> = [];
+    // Track all synced card positions for CARD ORDER reordering
+    // (includes both newly synced and previously synced/skipped cards)
+    const allCardPositions: Array<{ startPosition: number; spaceId: string; deckId: string }> = [];
 
     // Process each deck/group combination
     for (const [, { deckName, groupName, cards: groupCards }] of cardsByDeckAndGroup) {
@@ -176,9 +179,11 @@ export class SyncEngine {
             deckName: card.storedDeckName,
             groupName: null, // Legacy cards didn't have groups
           });
+          allCardPositions.push({ startPosition: card.startPosition, spaceId: card.spaceId!, deckId });
           result.skipped++; // Count as skipped since content didn't change
         } else if (card.spaceId && !hasChanged && !hasDeckChanged && !hasGroupChanged) {
           // Card unchanged and in same deck/group, skip
+          allCardPositions.push({ startPosition: card.startPosition, spaceId: card.spaceId!, deckId });
           result.skipped++;
         } else {
           cardsToSync.push({ card, isNew: !card.spaceId });
@@ -244,6 +249,7 @@ export class SyncEngine {
               deckName,
               groupName,
             });
+            allCardPositions.push({ startPosition: card.startPosition, spaceId: syncedCard.id, deckId });
           }
         } catch (error) {
           result.errors.push(`Error batch syncing cards to "${deckName || 'default'}${groupName ? `:${groupName}` : ''}": ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -265,6 +271,27 @@ export class SyncEngine {
         await this.plugin.saveSettings();
       } catch (error) {
         result.errors.push(`Error updating file with ids: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+
+    // Reorder cards if CARD ORDER directive is present
+    if (isFileOrdered(content) && allCardPositions.length > 0) {
+      // Group card IDs by deck, sorted by file position
+      const cardsByDeck = new Map<string, string[]>();
+      const sorted = [...allCardPositions].sort((a, b) => a.startPosition - b.startPosition);
+      for (const { spaceId, deckId } of sorted) {
+        if (!cardsByDeck.has(deckId)) {
+          cardsByDeck.set(deckId, []);
+        }
+        cardsByDeck.get(deckId)!.push(spaceId);
+      }
+
+      for (const [deckId, cardIds] of cardsByDeck) {
+        try {
+          await this.apiClient.reorderCards(deckId, cardIds, 0);
+        } catch (error) {
+          result.errors.push(`Error reordering cards in deck ${deckId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
       }
     }
 

@@ -45,6 +45,18 @@ export interface ParsedCard {
 }
 
 /**
+ * Checks whether the file has a CARD ORDER directive.
+ * When present, cards should be learned in the order they appear in the file.
+ * The directive is ignored inside fenced code blocks.
+ */
+export function isFileOrdered(content: string): boolean {
+  const contentWithoutCodeBlocks = content.replace(/```[\s\S]*?```/g, (match) =>
+    ' '.repeat(match.length)
+  );
+  return /^CARD ORDER$/m.test(contentWithoutCodeBlocks);
+}
+
+/**
  * Parses Q:/A: flashcards from markdown content
  *
  * Supported format:

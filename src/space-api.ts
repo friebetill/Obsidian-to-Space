@@ -270,6 +270,33 @@ export class SpaceApiClient {
   }
 
   /**
+   * Reorder cards within a deck, assigning consecutive positions starting at startPosition
+   */
+  async reorderCards(
+    deckId: string,
+    cardIds: string[],
+    startPosition: number
+  ): Promise<void> {
+    const query = `
+      mutation ReorderCards($deckId: ID!, $cardIds: [ID!]!, $startPosition: Int!) {
+        reorderCards(deckId: $deckId, cardIds: $cardIds, startPosition: $startPosition) {
+          id
+        }
+      }
+    `;
+
+    const result = await this.executeGraphQLWithRateLimit(query, {
+      deckId,
+      cardIds,
+      startPosition,
+    });
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to reorder cards');
+    }
+  }
+
+  /**
    * Delete a card
    */
   async deleteCard(id: string): Promise<void> {
