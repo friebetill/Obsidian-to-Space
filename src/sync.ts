@@ -1,7 +1,7 @@
 import { TFile } from 'obsidian';
 import type ObsidianToSpacePlugin from './main';
 import { SpaceApiClient } from './space-api';
-import { parseFlashcards, updateSpaceComments, ParsedCard, isFileOrdered } from './parser';
+import { parseFlashcards, updateSpaceComments, ParsedCard } from './parser';
 import { getOrUploadMedia } from './media-uploader';
 
 export interface SyncResult {
@@ -116,7 +116,7 @@ export class SyncEngine {
     const cardUpdates: Array<{ card: ParsedCard; spaceId: string; isNew: boolean }> = [];
     // Track metadata updates for settings
     const metadataUpdates: Array<{ spaceId: string; contentHash: string; deckName: string | null; groupName: string | null }> = [];
-    // Track all synced card positions for CARD ORDER reordering
+    // Track all synced card positions for reordering by file position
     // (includes both newly synced and previously synced/skipped cards)
     const allCardPositions: Array<{ startPosition: number; spaceId: string; deckId: string }> = [];
 
@@ -274,8 +274,8 @@ export class SyncEngine {
       }
     }
 
-    // Reorder cards if CARD ORDER directive is present
-    if (isFileOrdered(content) && allCardPositions.length > 0) {
+    // Reorder cards by their position in the file
+    if (allCardPositions.length > 0) {
       // Group card IDs by deck, sorted by file position
       const cardsByDeck = new Map<string, string[]>();
       const sorted = [...allCardPositions].sort((a, b) => a.startPosition - b.startPosition);
